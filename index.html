@@ -2,60 +2,76 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板v0.01</title>
+  <title>水質監控儀表板v0.02</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       background: #eef2f7;
       color: #333;
-      padding: 2em;
-      max-width: 600px;
-      margin: auto;
+      padding: 1em 2em;
+      max-width: 900px;
+      margin: 2em auto;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      min-height: 90vh;
     }
     h1 {
       text-align: center;
       color: #2c3e50;
       margin-bottom: 1em;
     }
+
     #loginPage, #dashboard {
+      flex: 1;
       display: none;
-    }
-    #loginPage {
-      display: flex;
-      flex-direction: column;
-      max-width: 300px;
-      margin: 5em auto;
-      padding: 2em;
       background: white;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+      padding: 2em;
+      box-sizing: border-box;
+    }
+    #loginPage {
+      max-width: 350px;
+      margin: 5em auto;
+      flex-grow: 0;
+      display: flex;
+      flex-direction: column;
     }
     #loginPage input {
       margin-bottom: 1em;
-      padding: 0.5em;
-      font-size: 1em;
+      padding: 0.75em;
+      font-size: 1.1em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
     }
     #loginPage button {
-      padding: 0.5em;
+      padding: 0.75em;
       background: #2980b9;
       color: white;
       border: none;
       cursor: pointer;
       border-radius: 4px;
+      font-size: 1.1em;
+      transition: background 0.3s;
+    }
+    #loginPage button:hover {
+      background: #1c5980;
     }
     #loginPage .error {
       color: #e74c3c;
       margin-bottom: 1em;
+      font-weight: 600;
     }
 
-    #dashboard h1 {
-      margin-bottom: 0.5em;
+    #dashboard {
+      display: flex;
+      flex-direction: column;
     }
-
     #status {
       text-align: center;
-      margin-bottom: 2em;
+      margin-bottom: 1.5em;
       font-weight: 600;
       color: #34495e;
     }
@@ -66,40 +82,47 @@
       color: #27ae60;
     }
 
-    /* 左側切換選單 */
+    /* 佈局: sidebar + content */
+    #mainContent {
+      display: flex;
+      flex: 1;
+      gap: 1em;
+      min-height: 250px;
+    }
     #sidebar {
-      float: left;
-      width: 120px;
-      background: white;
+      width: 160px;
+      background: #2980b9;
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
       padding: 1em;
-      margin-right: 1em;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5em;
     }
     #sidebar button {
-      display: block;
-      width: 100%;
-      margin-bottom: 0.5em;
-      padding: 0.5em;
-      background: #2980b9;
+      background: #3498db;
       border: none;
       color: white;
+      padding: 0.75em;
+      border-radius: 5px;
       cursor: pointer;
-      border-radius: 4px;
+      font-weight: 600;
       text-align: left;
+      transition: background 0.3s;
     }
-    #sidebar button.active {
+    #sidebar button.active,
+    #sidebar button:hover {
       background: #1c5980;
-      font-weight: bold;
     }
 
-    /* 右側內容區 */
     #content {
+      flex: 1;
       background: white;
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
       padding: 1.5em;
-      min-height: 180px;
+      box-sizing: border-box;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+      overflow-y: auto;
     }
     .location-box h2 {
       margin-top: 0;
@@ -112,16 +135,20 @@
       margin-top: 0.2em;
     }
 
-    /* 登出按鈕 */
     #logoutBtn {
-      float: right;
-      margin: 0 0 20px 0;
-      padding: 0.5em 1em;
+      align-self: flex-end;
+      margin-bottom: 1em;
+      padding: 0.5em 1.2em;
       cursor: pointer;
       background: #e74c3c;
       color: white;
       border: none;
       border-radius: 4px;
+      font-weight: 600;
+      transition: background 0.3s;
+    }
+    #logoutBtn:hover {
+      background: #a12720;
     }
   </style>
 </head>
@@ -131,23 +158,24 @@
   <div id="loginPage">
     <h2>請登入</h2>
     <div class="error" id="loginError" style="display:none;"></div>
-    <input type="text" id="username" name="User" placeholder="帳號" />
-    <input type="password" id="password" name="Pwd" placeholder="密碼" />
+    <input type="text" id="username" name="User" placeholder="帳號" autocomplete="username" />
+    <input type="password" id="password" name="Pwd" placeholder="密碼" autocomplete="current-password" />
     <button id="loginBtn">登入</button>
   </div>
 
   <!-- 儀表板 -->
-  <div id="dashboard" style="display:none;">
+  <div id="dashboard">
     <button id="logoutBtn">登出</button>
     <h1>水質即時監控儀表板</h1>
     <div id="status">連線中...</div>
 
-    <div style="overflow: hidden;">
+    <div id="mainContent">
       <div id="sidebar"></div>
       <div id="content"></div>
     </div>
   </div>
 
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
   const loginPage = document.getElementById('loginPage');
   const dashboard = document.getElementById('dashboard');
@@ -162,6 +190,8 @@
   let topicsAllowed = [];
   let currentTopic = '';
   let latestMessages = {};
+  let reconnectAttempts = 0;
+  const MAX_RECONNECTS = 5;
 
   loginBtn.onclick = async () => {
     const username = document.getElementById('username').value.trim();
@@ -200,12 +230,15 @@
 
   function showDashboard() {
     loginPage.style.display = 'none';
-    dashboard.style.display = 'block';
+    dashboard.style.display = 'flex';
     logoutBtn.style.display = 'inline-block';
     statusEl.textContent = '連線中...';
+    statusEl.className = '';
     sidebar.innerHTML = '';
     content.innerHTML = '';
     currentTopic = '';
+    latestMessages = {};
+    reconnectAttempts = 0;
 
     topicsAllowed.forEach((topic) => {
       const btn = document.createElement('button');
@@ -263,6 +296,7 @@
     });
 
     mqttClient.on('connect', () => {
+      reconnectAttempts = 0;
       statusEl.textContent = '✅ 已連線至 MQTT Broker';
       statusEl.className = 'connected';
 
@@ -282,7 +316,14 @@
     });
 
     mqttClient.on('reconnect', () => {
-      statusEl.textContent = '🔄 正在重新連線...';
+      reconnectAttempts++;
+      if (reconnectAttempts > MAX_RECONNECTS) {
+        mqttClient.end(true);
+        statusEl.textContent = '⚠️ 連線失敗，停止嘗試重連';
+        statusEl.className = 'error';
+        return;
+      }
+      statusEl.textContent = '🔄 正在重新連線... (嘗試第 ' + reconnectAttempts + ' 次)';
       statusEl.className = '';
     });
 
@@ -306,6 +347,7 @@
     topicsAllowed = [];
     currentTopic = '';
     latestMessages = {};
+    reconnectAttempts = 0;
 
     sidebar.innerHTML = '';
     content.innerHTML = '';
@@ -324,7 +366,6 @@
   loginPage.style.display = 'flex';
   dashboard.style.display = 'none';
   logoutBtn.style.display = 'none';
-
 </script>
 
 </body>
