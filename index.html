@@ -87,14 +87,16 @@
     });
 
     client.on('message', (topic, message) => {
-      const data = message.toString();
+  try {
+    const msg = JSON.parse(message.toString());  // 解析 JSON
+    const ph = msg.ph;                          // 取出 ph 數值
+    document.getElementById('data').textContent = `pH 值：${ph.toFixed(2)}`;
+  } catch(e) {
+    // 如果解析失敗，顯示原始文字
+    document.getElementById('data').textContent = `接收數據: ${message.toString()}`;
+  }
+});
 
-      if (topic === 'sensor/control/ph') {
-        phControlEl.textContent = data;
-      } else if (topic === 'sensor/A/ph') {
-        phAEl.textContent = data;
-      }
-    });
 
     client.on('reconnect', () => {
       statusEl.textContent = '🔄 正在重新連線...';
