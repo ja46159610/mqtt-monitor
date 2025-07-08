@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板</title>
+  <title>水質監控儀表板v0.02</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -10,7 +10,7 @@
       background: #eef2f7;
       color: #333;
       padding: 2em;
-      max-width: 600px;
+      max-width: 700px;
       margin: auto;
     }
     h1 {
@@ -31,41 +31,51 @@
       color: #27ae60;
     }
 
-    /* 頁籤樣式 */
+    /* 主要容器，左右排列 */
+    .container {
+      display: flex;
+      gap: 1em;
+    }
+
+    /* 左側頁籤欄 */
     .tabs {
       display: flex;
-      border-bottom: 2px solid #2980b9;
-      margin-bottom: 1em;
+      flex-direction: column;
+      width: 140px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+      padding: 0.5em;
     }
     .tab {
-      flex: 1;
       padding: 0.75em 1em;
       background: #bdc9d9;
       color: #2c3e50;
       cursor: pointer;
-      text-align: center;
       font-weight: 600;
-      border-radius: 6px 6px 0 0;
+      border-radius: 6px;
+      margin-bottom: 0.5em;
+      text-align: center;
       user-select: none;
       transition: background 0.3s;
-      margin-right: 0.3em;
     }
     .tab:last-child {
-      margin-right: 0;
+      margin-bottom: 0;
     }
     .tab.active {
       background: #2980b9;
       color: white;
-      box-shadow: 0 -3px 6px rgb(41 128 185 / 0.5);
+      box-shadow: 0 3px 8px rgb(41 128 185 / 0.6);
     }
 
-    /* 內容盒子 */
+    /* 右側內容區 */
     .content-box {
+      flex-grow: 1;
       background: white;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
       padding: 2em 1.5em;
-      min-height: 130px;
+      min-height: 150px;
       transition: box-shadow 0.3s ease;
     }
     .content-box:hover {
@@ -76,30 +86,33 @@
       color: #2980b9;
     }
     .ph-value {
-      font-size: 3rem;
+      font-size: 4rem;
       font-weight: 700;
       color: #27ae60;
-      margin-top: 0.2em;
+      margin-top: 0.3em;
+      text-align: center;
     }
   </style>
 </head>
 <body>
-  <h1>水質即時監控儀表板v0.01</h1>
+  <h1>水質即時監控儀表板</h1>
   <div id="status">連線中...</div>
 
-  <div class="tabs">
-    <div class="tab active" data-target="control">中控室</div>
-    <div class="tab" data-target="a">A 地</div>
-  </div>
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" data-target="control">中控室</div>
+      <div class="tab" data-target="a">A 地</div>
+    </div>
 
-  <div id="control" class="content-box">
-    <h2>溫泉會館1 水質 pH</h2>
-    <div id="ph_control" class="ph-value">尚無數據</div>
-  </div>
+    <div id="control" class="content-box">
+      <h2>中控室 水質 pH</h2>
+      <div id="ph_control" class="ph-value">尚無數據</div>
+    </div>
 
-  <div id="a" class="content-box" style="display:none;">
-    <h2>溫泉會館2 水質 pH</h2>
-    <div id="ph_a" class="ph-value">尚無數據</div>
+    <div id="a" class="content-box" style="display:none;">
+      <h2>A 地 水質 pH</h2>
+      <div id="ph_a" class="ph-value">尚無數據</div>
+    </div>
   </div>
 
   <script>
@@ -126,7 +139,7 @@
     const client = mqtt.connect('wss://control.cittw.store:443', {
       username: 'user1',
       password: '16968033',
-      reconnectPeriod: 2000 // 斷線自動重連時間(ms)
+      reconnectPeriod: 2000
     });
 
     const statusEl = document.getElementById('status');
