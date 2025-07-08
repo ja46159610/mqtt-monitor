@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板 v0.12</title>
+  <title>水質即時監控儀表板 v0.13</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -10,7 +10,7 @@
       background: #eef2f7;
       color: #333;
       padding: 2em;
-      max-width: 900px;
+      max-width: 700px;
       margin: auto;
     }
     h1 {
@@ -22,38 +22,24 @@
       text-align: center;
       margin-bottom: 1em;
       font-weight: 600;
+      color: #34495e;
     }
     .error { color: #e74c3c; }
     .connected { color: #27ae60; }
-
-    #login-box {
-      text-align: center;
-      margin-bottom: 2em;
-    }
-    #login-box input {
-      padding: 0.5em;
-      margin: 0.5em;
-      width: 200px;
-    }
-    #login-box button {
-      padding: 0.5em 1em;
-    }
 
     .container {
       display: flex;
       gap: 1em;
     }
-
     .tabs {
       display: flex;
       flex-direction: column;
-      width: 160px;
+      width: 140px;
       background: white;
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
       padding: 0.5em;
     }
-
     .tab {
       padding: 0.75em 1em;
       background: #bdc9d9;
@@ -69,49 +55,59 @@
     .tab.active {
       background: #2980b9;
       color: white;
-      box-shadow: 0 3px 8px rgba(41,128,185,0.6);
+      box-shadow: 0 3px 8px rgb(41 128 185 / 0.6);
     }
-
     .content-box {
       flex-grow: 1;
       background: white;
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
       padding: 2em 1.5em;
       min-height: 150px;
-      display: none;
     }
-
-    .content-box.active {
-      display: block;
+    .content-box:hover {
+      box-shadow: 0 4px 15px rgb(0 0 0 / 0.15);
     }
-
+    h2 {
+      margin-top: 0;
+      color: #2980b9;
+    }
     .ph-value {
       font-size: 4rem;
       font-weight: 700;
       color: #27ae60;
-      text-align: center;
       margin-top: 0.3em;
+      text-align: center;
     }
-
-    #dashboard {
-      display: none;
+    #logoutBtn {
+      float: right;
+      margin-bottom: 10px;
+      padding: 0.3em 1em;
+      cursor: pointer;
+      background-color: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+    #logoutBtn:hover {
+      background-color: #c0392b;
     }
   </style>
 </head>
 <body>
-  <h1>水質即時監控儀表板 v0.12</h1>
+  <h1>水質即時監控儀表板 v0.13</h1>
 
-  <!-- 登入表單 -->
-  <div id="login-box">
-    <input type="text" id="username" placeholder="帳號"><br>
-    <input type="password" id="password" placeholder="密碼"><br>
+  <!-- 登入區 -->
+  <div id="login-box" style="text-align:center; margin-bottom:1.5em;">
+    <input type="text" id="username" placeholder="帳號" style="padding:0.5em; margin:0.5em;"><br>
+    <input type="password" id="password" placeholder="密碼" style="padding:0.5em; margin:0.5em;"><br>
     <button onclick="submitLogin()">登入</button>
-    <span id="login-status"></span>
+    <span id="login-status" style="margin-left:1em;"></span>
   </div>
 
-  <!-- 儀表板 -->
-  <div id="dashboard">
+  <!-- 儀表板區 -->
+  <div id="dashboard" style="display:none;">
+    <button id="logoutBtn" onclick="logout()">登出</button>
     <div id="status">尚未連線</div>
     <div class="container">
       <div class="tabs" id="tabs"></div>
@@ -147,6 +143,7 @@
         document.getElementById('login-status').textContent = '✅ 登入成功';
         document.getElementById('login-status').style.color = 'green';
 
+        // 隱藏登入區，顯示儀表板
         document.getElementById('login-box').style.display = 'none';
         document.getElementById('dashboard').style.display = 'block';
 
@@ -182,10 +179,10 @@
 
         const content = document.createElement('div');
         content.className = 'content-box' + (idx === 0 ? ' active' : '');
-        content.id = 'content-' + topic;
+        content.id = 'content-' + topic.replace(/\//g, '-');
         content.innerHTML = `
           <h2>${label} pH</h2>
-          <div class="ph-value" id="ph-${topic.replace(/\//g, '-') }">尚無數據</div>
+          <div class="ph-value" id="ph-${topic.replace(/\//g, '-')}">尚無數據</div>
         `;
         contentsEl.appendChild(content);
 
@@ -200,7 +197,7 @@
 
     function initMQTT(topics) {
       const statusEl = document.getElementById('status');
-      if (client) client.end(true); // 中斷前一個連線
+      if (client) client.end(true);
 
       client = mqtt.connect('wss://control.cittw.store:443', {
         username: 'user1',
@@ -243,6 +240,26 @@
         statusEl.textContent = '🔄 嘗試重新連線...';
         statusEl.className = '';
       });
+    }
+
+    function logout() {
+      if (client) {
+        client.end(true);
+        client = null;
+      }
+      // 重設狀態文字
+      document.getElementById('status').textContent = '尚未連線';
+      document.getElementById('status').className = '';
+      // 清空所有 pH 顯示
+      document.querySelectorAll('.ph-value').forEach(el => el.textContent = '尚無數據');
+      // 顯示登入框，隱藏儀表板
+      document.getElementById('login-box').style.display = 'block';
+      document.getElementById('dashboard').style.display = 'none';
+      // 清空帳號密碼欄位
+      document.getElementById('username').value = '';
+      document.getElementById('password').value = '';
+      // 清空登入狀態文字
+      document.getElementById('login-status').textContent = '';
     }
   </script>
 </body>
