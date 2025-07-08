@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板 v0.08</title>
+  <title>水質監控儀表板 v0.09</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -117,12 +117,12 @@
     <div id="status">連線中...</div>
 
     <div class="container">
-      <div class="tabs">
-        <div class="tab active" data-target="control">溫泉會館_A</div>
-        <div class="tab" data-target="a">溫泉會館_B</div>
+      <div class="tabs" id="tabs">
+        <div class="tab" id="tabA" data-target="control" style="display:none;">溫泉會館_A</div>
+        <div class="tab" id="tabB" data-target="a" style="display:none;">溫泉會館_B</div>
       </div>
 
-      <div id="control" class="content-box">
+      <div id="control" class="content-box" style="display:none;">
         <h2>湯池_1 水質 pH</h2>
         <div id="ph_control" class="ph-value">尚無數據</div>
       </div>
@@ -155,16 +155,35 @@
         return response.json();
       })
       .then(data => {
-        document.getElementById('login-status').innerText = '✅ 登入成功';
-        document.getElementById('login-status').style.color = 'green';
-        document.getElementById('account-name').innerText = '帳號：' + user;
+        const topics = data.topics.split(',').map(t => t.trim());
+        const canSeeA = topics.includes('sensor/control/ph');
+        const canSeeB = topics.includes('sensor/A/ph');
 
-        alert("你的授權主題(Tp)：\n" + data.topics); // ✅ 顯示 Tp 欄位資料
+        if (!canSeeA && !canSeeB) {
+          alert("登入成功，但你沒有任何主題的查看權限！");
+          return;
+        }
+
+        alert("登入成功，授權主題:\n" + topics.join('\n'));
 
         document.getElementById('login-box').style.display = 'none';
         document.getElementById('main-content').style.display = 'block';
+        document.getElementById('account-name').innerText = '帳號：' + user;
 
-        initMQTT();
+        if (canSeeA) {
+          document.getElementById('tabA').style.display = 'block';
+          document.getElementById('control').style.display = 'block';
+          document.getElementById('tabA').classList.add('active');
+        }
+        if (canSeeB) {
+          document.getElementById('tabB').style.display = 'block';
+          if (!canSeeA) {
+            document.getElementById('a').style.display = 'block';
+            document.getElementById('tabB').classList.add('active');
+          }
+        }
+
+        initMQTT(topics);
       })
       .catch(err => {
         document.getElementById('login-status').innerText = '❌ 登入失敗：' + err.message;
@@ -172,7 +191,7 @@
       });
     }
 
-    function initMQTT() {
+    function initMQTT(topics) {
       const statusEl = document.getElementById('status');
       const phControlEl = document.getElementById('ph_control');
       const phAEl = document.getElementById('ph_a');
@@ -186,8 +205,7 @@
       client.on('connect', () => {
         statusEl.textContent = '✅ 已連線至 MQTT Broker';
         statusEl.className = 'connected';
-        client.subscribe('sensor/control/ph');
-        client.subscribe('sensor/A/ph');
+        topics.forEach(t => client.subscribe(t));
       });
 
       client.on('message', (topic, message) => {
@@ -217,7 +235,7 @@
 
     function logout() {
       if (client) {
-        client.end(); // 關閉 MQTT
+        client.end();
         client = null;
       }
       document.getElementById('main-content').style.display = 'none';
@@ -227,22 +245,21 @@
       document.getElementById('status').className = '';
       document.getElementById('ph_control').textContent = '尚無數據';
       document.getElementById('ph_a').textContent = '尚無數據';
+      document.querySelectorAll('.tab').forEach(t => {
+        t.style.display = 'none';
+        t.classList.remove('active');
+      });
+      document.querySelectorAll('.content-box').forEach(c => c.style.display = 'none');
     }
 
     // 頁籤切換邏輯
-    const tabs = document.querySelectorAll('.tab');
-    const contents = {
-      control: document.getElementById('control'),
-      a: document.getElementById('a')
-    };
-    tabs.forEach(tab => {
+    document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
-        tabs.forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         const target = tab.dataset.target;
-        for (const key in contents) {
-          contents[key].style.display = (key === target) ? 'block' : 'none';
-        }
+        document.querySelectorAll('.content-box').forEach(c => c.style.display = 'none');
+        document.getElementById(target).style.display = 'block';
       });
     });
   </script>
