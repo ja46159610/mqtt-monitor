@@ -87,16 +87,20 @@
     });
 
     client.on('message', (topic, message) => {
-  try {
-    const msg = JSON.parse(message.toString());  // 解析 JSON
-    const ph = msg.ph;                          // 取出 ph 數值
-    document.getElementById('data').textContent = `pH 值：${ph.toFixed(2)}`;
-  } catch(e) {
-    // 如果解析失敗，顯示原始文字
-    document.getElementById('data').textContent = `接收數據: ${message.toString()}`;
-  }
-});
-
+      try {
+        const msg = JSON.parse(message.toString());  // 解析 JSON
+        const ph = msg.ph;                            // 取出 ph 數值
+        if (topic === 'sensor/control/ph') {
+          phControlEl.textContent = `pH 值：${ph.toFixed(2)}`;
+        } else if (topic === 'sensor/A/ph') {
+          phAEl.textContent = `pH 值：${ph.toFixed(2)}`;
+        } else {
+          console.warn(`未知主題：${topic}`, msg);
+        }
+      } catch(e) {
+        console.error('訊息解析錯誤', e);
+      }
+    });
 
     client.on('reconnect', () => {
       statusEl.textContent = '🔄 正在重新連線...';
