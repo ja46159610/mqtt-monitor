@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>水質感測監控</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 2em; background: #f5f5f5; }
+    #data { font-size: 24px; color: #0b6; margin-top: 1em; }
+  </style>
+</head>
+<body>
+  <h1>水質即時監控</h1>
+  <div id="status">連線中...</div>
+  <div id="data">尚無數據</div>
+
+  <script>
+    const client = mqtt.connect('wss://control.cittw.store:443', {
+      username: 'user1',   // 你設定的帳號
+      password: '16968033'
+    });
+
+    client.on('connect', () => {
+      document.getElementById('status').textContent = "✅ 已連線至 MQTT Broker";
+      client.subscribe('sensor/waterquality');
+    });
+
+    client.on('message', (topic, message) => {
+      const msg = message.toString();
+      document.getElementById('data').textContent = `接收數據: ${msg}`;
+      console.log(`收到 ${topic}: ${msg}`);
+    });
+
+    client.on('error', (err) => {
+      document.getElementById('status').textContent = "❌ 錯誤：" + err.message;
+      console.error('MQTT 錯誤：', err);
+    });
+  </script>
+</body>
+</html>
