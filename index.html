@@ -1,39 +1,115 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <title>水質感測監控</title>
+  <meta charset="UTF-8" />
+  <title>水質監控儀表板</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 2em; background: #f5f5f5; }
-    #data { font-size: 24px; color: #0b6; margin-top: 1em; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #eef2f7;
+      color: #333;
+      padding: 2em;
+      max-width: 600px;
+      margin: auto;
+    }
+    h1 {
+      text-align: center;
+      color: #2c3e50;
+      margin-bottom: 1em;
+    }
+    .location-box {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+      padding: 1.5em;
+      margin-bottom: 1.5em;
+      transition: box-shadow 0.3s ease;
+    }
+    .location-box:hover {
+      box-shadow: 0 4px 15px rgb(0 0 0 / 0.15);
+    }
+    h2 {
+      margin-top: 0;
+      color: #2980b9;
+    }
+    .ph-value {
+      font-size: 3rem;
+      font-weight: 700;
+      color: #27ae60;
+      margin-top: 0.2em;
+    }
+    #status {
+      text-align: center;
+      margin-bottom: 2em;
+      font-weight: 600;
+      color: #34495e;
+    }
+    .error {
+      color: #e74c3c;
+    }
+    .connected {
+      color: #27ae60;
+    }
   </style>
 </head>
 <body>
-  <h1>水質即時監控</h1>
+  <h1>水質即時監控儀表板</h1>
   <div id="status">連線中...</div>
-  <div id="data">尚無數據</div>
+
+  <div class="location-box">
+    <h2>中控室 水質 pH</h2>
+    <div id="ph_control" class="ph-value">尚無數據</div>
+  </div>
+
+  <div class="location-box">
+    <h2>A 地 水質 pH</h2>
+    <div id="ph_a" class="ph-value">尚無數據</div>
+  </div>
 
   <script>
     const client = mqtt.connect('wss://control.cittw.store:443', {
-      username: 'user1',   // 你設定的帳號
-      password: '16968033'
+      username: 'user1',
+      password: '16968033',
+      reconnectPeriod: 2000 // 斷線自動重連時間(ms)
     });
 
+    const statusEl = document.getElementById('status');
+    const phControlEl = document.getElementById('ph_control');
+    const phAEl = document.getElementById('ph_a');
+
     client.on('connect', () => {
-      document.getElementById('status').textContent = "✅ 已連線至 MQTT Broker";
-      client.subscribe('sensor/waterquality');
+      statusEl.textContent = '✅ 已連線至 MQTT Broker';
+      statusEl.className = 'connected';
+
+      client.subscribe('sensor/control/ph');
+      client.subscribe('sensor/A/ph');
     });
 
     client.on('message', (topic, message) => {
-      const msg = message.toString();
-      document.getElementById('data').textContent = `接收數據: ${msg}`;
-      console.log(`收到 ${topic}: ${msg}`);
+      const data = message.toString();
+
+      if (topic === 'sensor/control/ph') {
+        phControlEl.textContent = data;
+      } else if (topic === 'sensor/A/ph') {
+        phAEl.textContent = data;
+      }
+    });
+
+    client.on('reconnect', () => {
+      statusEl.textContent = '🔄 正在重新連線...';
+      statusEl.className = '';
     });
 
     client.on('error', (err) => {
-      document.getElementById('status').textContent = "❌ 錯誤：" + err.message;
-      console.error('MQTT 錯誤：', err);
+      statusEl.textContent = '❌ 連線錯誤：' + err.message;
+      statusEl.className = 'error';
+      console.error('MQTT Error:', err);
+    });
+
+    client.on('offline', () => {
+      statusEl.textContent = '⚠️ 已離線';
+      statusEl.className = 'error';
     });
   </script>
 </body>
