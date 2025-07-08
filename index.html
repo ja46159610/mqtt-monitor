@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板v0.03</title>
+  <title>水質監控儀表板</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -58,12 +58,12 @@
   <div id="status">連線中...</div>
 
   <div class="location-box">
-    <h2>溫泉會館A 水質 pH</h2>
+    <h2>中控室 水質 pH</h2>
     <div id="ph_control" class="ph-value">尚無數據</div>
   </div>
 
   <div class="location-box">
-    <h2>溫泉會館B 水質 pH</h2>
+    <h2>A 地 水質 pH</h2>
     <div id="ph_a" class="ph-value">尚無數據</div>
   </div>
 
@@ -91,11 +91,11 @@
         const msg = JSON.parse(message.toString());  // 解析 JSON
         const ph = msg.ph;                            // 取出 ph 數值
         if (topic === 'sensor/control/ph') {
-          phControlEl.textContent = pH 值：${ph.toFixed(2)};
+          phControlEl.textContent = `pH 值：${ph.toFixed(2)}`;
         } else if (topic === 'sensor/A/ph') {
-          phAEl.textContent = pH 值：${ph.toFixed(2)};
+          phAEl.textContent = `pH 值：${ph.toFixed(2)}`;
         } else {
-          console.warn(未知主題：${topic}, msg);
+          console.warn(`未知主題：${topic}`, msg);
         }
       } catch(e) {
         console.error('訊息解析錯誤', e);
