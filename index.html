@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板</title>
+  <title>水質監控儀表板v0.01</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -161,6 +161,7 @@
   let mqttClient = null;
   let topicsAllowed = [];
   let currentTopic = '';
+  let latestMessages = {};
 
   loginBtn.onclick = async () => {
     const username = document.getElementById('username').value.trim();
@@ -173,11 +174,10 @@
     }
 
     try {
-      // 呼叫後端登入API
-      const res = await fetch('http://localhost:8000/login', {  // 改成你的API網址
+      const res = await fetch('http://localhost:8000/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username, password })
+        body: new URLSearchParams({ User: username, Pwd: password })
       });
 
       if (!res.ok) {
@@ -185,7 +185,6 @@
       }
       const data = await res.json();
 
-      // 取得可看 topics，格式例如 "sensor/control/ph,sensor/A/ph"
       topicsAllowed = data.topics.split(',').map(t => t.trim());
       if (topicsAllowed.length === 0) {
         throw new Error('沒有可觀看的主題');
@@ -208,8 +207,7 @@
     content.innerHTML = '';
     currentTopic = '';
 
-    // 產生左側按鈕，根據 topicsAllowed
-    topicsAllowed.forEach((topic, i) => {
+    topicsAllowed.forEach((topic) => {
       const btn = document.createElement('button');
       btn.textContent = topic;
       btn.onclick = () => {
@@ -220,7 +218,7 @@
       };
       sidebar.appendChild(btn);
     });
-    // 預設點第一個
+
     if (topicsAllowed.length > 0) {
       currentTopic = topicsAllowed[0];
       updateActiveSidebar();
@@ -233,9 +231,6 @@
       btn.classList.toggle('active', btn.textContent === currentTopic);
     });
   }
-
-  // 儲存最新收到的訊息，給對應 topic
-  const latestMessages = {};
 
   function showTopicData(topic) {
     if (latestMessages[topic]) {
@@ -271,7 +266,6 @@
       statusEl.textContent = '✅ 已連線至 MQTT Broker';
       statusEl.className = 'connected';
 
-      // 訂閱允許看的主題
       topicsAllowed.forEach(t => mqttClient.subscribe(t));
     });
 
@@ -313,7 +307,6 @@
     currentTopic = '';
     latestMessages = {};
 
-    // 清空介面
     sidebar.innerHTML = '';
     content.innerHTML = '';
     statusEl.textContent = '';
@@ -321,18 +314,17 @@
 
     loginPage.style.display = 'flex';
     dashboard.style.display = 'none';
+    logoutBtn.style.display = 'none';
 
-    // 清除登入欄
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
-
-    logoutBtn.style.display = 'none';
   };
 
-  // 預設先顯示登入頁
+  // 預設顯示登入頁
   loginPage.style.display = 'flex';
   dashboard.style.display = 'none';
   logoutBtn.style.display = 'none';
+
 </script>
 
 </body>
