@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板 v0.04</title>
+  <title>水質監控儀表板v0.04</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -10,7 +10,7 @@
       background: #eef2f7;
       color: #333;
       padding: 2em;
-      max-width: 800px;
+      max-width: 700px;
       margin: auto;
     }
     h1 {
@@ -20,16 +20,12 @@
     }
     #status {
       text-align: center;
-      margin-bottom: 2em;
+      margin-bottom: 1em;
       font-weight: 600;
       color: #34495e;
     }
-    .error {
-      color: #e74c3c;
-    }
-    .connected {
-      color: #27ae60;
-    }
+    .error { color: #e74c3c; }
+    .connected { color: #27ae60; }
 
     .container {
       display: flex;
@@ -54,13 +50,13 @@
       margin-bottom: 0.5em;
       text-align: center;
       user-select: none;
+      transition: background 0.3s;
     }
     .tab.active {
       background: #2980b9;
       color: white;
       box-shadow: 0 3px 8px rgb(41 128 185 / 0.6);
     }
-
     .content-box {
       flex-grow: 1;
       background: white;
@@ -69,6 +65,13 @@
       padding: 2em 1.5em;
       min-height: 150px;
     }
+    .content-box:hover {
+      box-shadow: 0 4px 15px rgb(0 0 0 / 0.15);
+    }
+    h2 {
+      margin-top: 0;
+      color: #2980b9;
+    }
     .ph-value {
       font-size: 4rem;
       font-weight: 700;
@@ -76,117 +79,75 @@
       margin-top: 0.3em;
       text-align: center;
     }
-
-    /* 登入頁樣式 */
-    #loginPage {
-      max-width: 320px;
-      margin: 5em auto;
-      padding: 2em;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
-    }
-    #loginPage input {
-      width: 100%;
-      margin-bottom: 1em;
-      padding: 0.6em;
-      font-size: 1em;
-    }
-    #loginPage button {
-      width: 100%;
-      padding: 0.6em;
-      background: #2980b9;
-      color: white;
-      border: none;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-    #logoutBtn {
-      float: right;
-      margin-bottom: 1em;
-      background: #e74c3c;
-      color: white;
-      border: none;
-      padding: 0.5em 1em;
-      border-radius: 4px;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
+  <h1>水質即時監控儀表板</h1>
 
-  <!-- 登入畫面 -->
-  <div id="loginPage">
-    <h2>請登入</h2>
-    <div class="error" id="loginError" style="display:none;"></div>
-    <input type="text" id="username" placeholder="MQTT 帳號">
-    <input type="password" id="password" placeholder="MQTT 密碼">
-    <button onclick="handleLogin()">登入</button>
+  <!-- 登入表單 -->
+  <div id="login-box" style="text-align:center; margin-bottom:1.5em;">
+    <input type="text" id="username" placeholder="帳號" style="padding:0.5em; margin:0.5em;">
+    <input type="password" id="password" placeholder="密碼" style="padding:0.5em; margin:0.5em;">
+    <button onclick="submitLogin()">登入</button>
+    <span id="login-status" style="margin-left:1em;"></span>
   </div>
 
-  <!-- 儀表板畫面 -->
-  <div id="dashboard" style="display:none;">
-    <button id="logoutBtn" onclick="logout()">登出</button>
-    <h1>水質即時監控儀表板</h1>
-    <div id="status">連線中...</div>
+  <div id="status">連線中...</div>
 
-    <div class="container">
-      <div class="tabs">
-        <div class="tab active" data-target="control">溫泉會館_A</div>
-        <div class="tab" data-target="a">溫泉會館_B</div>
-      </div>
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" data-target="control">溫泉會館_A</div>
+      <div class="tab" data-target="a">溫泉會館_B</div>
+    </div>
 
-      <div id="control" class="content-box">
-        <h2>湯池_1 水質 pH</h2>
-        <div id="ph_control" class="ph-value">尚無數據</div>
-      </div>
+    <div id="control" class="content-box">
+      <h2>湯池_1 水質 pH</h2>
+      <div id="ph_control" class="ph-value">尚無數據</div>
+    </div>
 
-      <div id="a" class="content-box" style="display:none;">
-        <h2>湯池_1 水質 pH</h2>
-        <div id="ph_a" class="ph-value">尚無數據</div>
-      </div>
+    <div id="a" class="content-box" style="display:none;">
+      <h2>湯池_1 水質 pH</h2>
+      <div id="ph_a" class="ph-value">尚無數據</div>
     </div>
   </div>
 
-<script>
-  const loginPage = document.getElementById('loginPage');
-  const dashboard = document.getElementById('dashboard');
-  const loginError = document.getElementById('loginError');
-  const statusEl = document.getElementById('status');
-  const tabs = document.querySelectorAll('.tab');
-  const phControlEl = document.getElementById('ph_control');
-  const phAEl = document.getElementById('ph_a');
+  <script>
+    // 頁籤切換邏輯
+    const tabs = document.querySelectorAll('.tab');
+    const contents = {
+      control: document.getElementById('control'),
+      a: document.getElementById('a')
+    };
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.target;
+        for (const key in contents) {
+          contents[key].style.display = (key === target) ? 'block' : 'none';
+        }
+      });
+    });
 
-  let mqttClient;
-
-  function handleLogin() {
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value.trim();
-
-    if (!username || !password) {
-      loginError.textContent = '請輸入帳號與密碼';
-      loginError.style.display = 'block';
-      return;
-    }
-
-    loginError.style.display = 'none';
-    loginPage.style.display = 'none';
-    dashboard.style.display = 'block';
-
-    mqttClient = mqtt.connect('wss://control.cittw.store:443', {
-      username,
-      password,
+    // MQTT 預設連線（不需登入也能看到資料）
+    const client = mqtt.connect('wss://control.cittw.store:443', {
+      username: 'user1',
+      password: '16968033',
       reconnectPeriod: 2000
     });
 
-    mqttClient.on('connect', () => {
+    const statusEl = document.getElementById('status');
+    const phControlEl = document.getElementById('ph_control');
+    const phAEl = document.getElementById('ph_a');
+
+    client.on('connect', () => {
       statusEl.textContent = '✅ 已連線至 MQTT Broker';
       statusEl.className = 'connected';
-      mqttClient.subscribe('sensor/control/ph');
-      mqttClient.subscribe('sensor/A/ph');
+      client.subscribe('sensor/control/ph');
+      client.subscribe('sensor/A/ph');
     });
 
-    mqttClient.on('message', (topic, message) => {
+    client.on('message', (topic, message) => {
       try {
         const msg = JSON.parse(message.toString());
         const ph = msg.ph;
@@ -200,48 +161,49 @@
       }
     });
 
-    mqttClient.on('error', err => {
+    client.on('error', (err) => {
       statusEl.textContent = '❌ 連線錯誤：' + err.message;
       statusEl.className = 'error';
     });
 
-    mqttClient.on('offline', () => {
+    client.on('offline', () => {
       statusEl.textContent = '⚠️ 已離線';
       statusEl.className = 'error';
     });
 
-    mqttClient.on('reconnect', () => {
-      statusEl.textContent = '🔄 正在重新連線...';
-      statusEl.className = '';
-    });
-  }
+    // 登入功能：呼叫 FastAPI 的 /login
+    function submitLogin() {
+      const user = document.getElementById('username').value;
+      const pwd = document.getElementById('password').value;
 
-  function logout() {
-    if (mqttClient) {
-      mqttClient.end(true);
+      const formData = new URLSearchParams();
+      formData.append('User', user);
+      formData.append('Pwd', pwd);
+
+      fetch('http://localhost:8000/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formData
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('帳號或密碼錯誤');
+        }
+        return response.json();
+      })
+      .then(data => {
+        document.getElementById('login-status').innerText = '✅ 登入成功，允許主題：' + data.topics;
+        document.getElementById('login-status').style.color = 'green';
+        console.log('登入成功，可訂閱 topics:', data.topics);
+        // ➤ 未來可依據 data.topics 動態顯示特定資料
+      })
+      .catch(err => {
+        document.getElementById('login-status').innerText = '❌ 登入失敗：' + err.message;
+        document.getElementById('login-status').style.color = 'red';
+      });
     }
-    dashboard.style.display = 'none';
-    loginPage.style.display = 'block';
-    document.getElementById('username').value = '';
-    document.getElementById('password').value = '';
-  }
-
-  // 頁籤切換
-  const contents = {
-    control: document.getElementById('control'),
-    a: document.getElementById('a')
-  };
-
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      tabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const target = tab.dataset.target;
-      for (const key in contents) {
-        contents[key].style.display = (key === target) ? 'block' : 'none';
-      }
-    });
-  });
-</script>
+  </script>
 </body>
 </html>
