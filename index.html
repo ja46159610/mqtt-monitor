@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板</title>
+  <title>水質監控儀表板 (含登入登出)</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -18,27 +18,41 @@
       color: #2c3e50;
       margin-bottom: 1em;
     }
-    .location-box {
+    #loginPage, #dashboard {
+      display: none;
+    }
+    #loginPage {
+      display: flex;
+      flex-direction: column;
+      max-width: 300px;
+      margin: 5em auto;
+      padding: 2em;
       background: white;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
-      padding: 1.5em;
-      margin-bottom: 1.5em;
-      transition: box-shadow 0.3s ease;
     }
-    .location-box:hover {
-      box-shadow: 0 4px 15px rgb(0 0 0 / 0.15);
+    #loginPage input {
+      margin-bottom: 1em;
+      padding: 0.5em;
+      font-size: 1em;
     }
-    h2 {
-      margin-top: 0;
-      color: #2980b9;
+    #loginPage button {
+      padding: 0.5em;
+      background: #2980b9;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
     }
-    .ph-value {
-      font-size: 3rem;
-      font-weight: 700;
-      color: #27ae60;
-      margin-top: 0.2em;
+    #loginPage .error {
+      color: #e74c3c;
+      margin-bottom: 1em;
     }
+
+    #dashboard h1 {
+      margin-bottom: 0.5em;
+    }
+
     #status {
       text-align: center;
       margin-bottom: 2em;
@@ -51,72 +65,275 @@
     .connected {
       color: #27ae60;
     }
+
+    /* 左側切換選單 */
+    #sidebar {
+      float: left;
+      width: 120px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+      padding: 1em;
+      margin-right: 1em;
+    }
+    #sidebar button {
+      display: block;
+      width: 100%;
+      margin-bottom: 0.5em;
+      padding: 0.5em;
+      background: #2980b9;
+      border: none;
+      color: white;
+      cursor: pointer;
+      border-radius: 4px;
+      text-align: left;
+    }
+    #sidebar button.active {
+      background: #1c5980;
+      font-weight: bold;
+    }
+
+    /* 右側內容區 */
+    #content {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+      padding: 1.5em;
+      min-height: 180px;
+    }
+    .location-box h2 {
+      margin-top: 0;
+      color: #2980b9;
+    }
+    .ph-value {
+      font-size: 3rem;
+      font-weight: 700;
+      color: #27ae60;
+      margin-top: 0.2em;
+    }
+
+    /* 登出按鈕 */
+    #logoutBtn {
+      float: right;
+      margin: 0 0 20px 0;
+      padding: 0.5em 1em;
+      cursor: pointer;
+      background: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
-  <h1>水質即時監控儀表板</h1>
-  <div id="status">連線中...</div>
 
-  <div class="location-box">
-    <h2>溫泉會館A 水質 pH</h2>
-    <div id="ph_control" class="ph-value">尚無數據</div>
+  <!-- 登入頁 -->
+  <div id="loginPage">
+    <h2>請登入</h2>
+    <div class="error" id="loginError" style="display:none;"></div>
+    <input type="text" id="username" placeholder="帳號" />
+    <input type="password" id="password" placeholder="密碼" />
+    <button id="loginBtn">登入</button>
   </div>
 
-  <div class="location-box">
-    <h2>溫泉會館B 水質 pH</h2>
-    <div id="ph_a" class="ph-value">尚無數據</div>
+  <!-- 儀表板 -->
+  <div id="dashboard" style="display:none;">
+    <button id="logoutBtn">登出</button>
+    <h1>水質即時監控儀表板</h1>
+    <div id="status">連線中...</div>
+
+    <div style="overflow: hidden;">
+      <div id="sidebar"></div>
+      <div id="content"></div>
+    </div>
   </div>
 
-  <script>
-    const client = mqtt.connect('wss://control.cittw.store:443', {
-      username: 'user1',
-      password: '16968033',
-      reconnectPeriod: 2000 // 斷線自動重連時間(ms)
+<script>
+  const loginPage = document.getElementById('loginPage');
+  const dashboard = document.getElementById('dashboard');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginError = document.getElementById('loginError');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const statusEl = document.getElementById('status');
+  const sidebar = document.getElementById('sidebar');
+  const content = document.getElementById('content');
+
+  let mqttClient = null;
+  let topicsAllowed = [];
+  let currentTopic = '';
+
+  loginBtn.onclick = async () => {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    loginError.style.display = 'none';
+    if (!username || !password) {
+      loginError.textContent = '請輸入帳號和密碼';
+      loginError.style.display = 'block';
+      return;
+    }
+
+    try {
+      // 呼叫後端登入API
+      const res = await fetch('http://localhost:8000/login', {  // 改成你的API網址
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ username, password })
+      });
+
+      if (!res.ok) {
+        throw new Error('帳號或密碼錯誤');
+      }
+      const data = await res.json();
+
+      // 取得可看 topics，格式例如 "sensor/control/ph,sensor/A/ph"
+      topicsAllowed = data.topics.split(',').map(t => t.trim());
+      if (topicsAllowed.length === 0) {
+        throw new Error('沒有可觀看的主題');
+      }
+
+      showDashboard();
+      connectMQTT(username, password);
+    } catch (e) {
+      loginError.textContent = e.message;
+      loginError.style.display = 'block';
+    }
+  };
+
+  function showDashboard() {
+    loginPage.style.display = 'none';
+    dashboard.style.display = 'block';
+    logoutBtn.style.display = 'inline-block';
+    statusEl.textContent = '連線中...';
+    sidebar.innerHTML = '';
+    content.innerHTML = '';
+    currentTopic = '';
+
+    // 產生左側按鈕，根據 topicsAllowed
+    topicsAllowed.forEach((topic, i) => {
+      const btn = document.createElement('button');
+      btn.textContent = topic;
+      btn.onclick = () => {
+        if (currentTopic === topic) return;
+        currentTopic = topic;
+        updateActiveSidebar();
+        showTopicData(topic);
+      };
+      sidebar.appendChild(btn);
+    });
+    // 預設點第一個
+    if (topicsAllowed.length > 0) {
+      currentTopic = topicsAllowed[0];
+      updateActiveSidebar();
+      showTopicData(currentTopic);
+    }
+  }
+
+  function updateActiveSidebar() {
+    Array.from(sidebar.children).forEach(btn => {
+      btn.classList.toggle('active', btn.textContent === currentTopic);
+    });
+  }
+
+  // 儲存最新收到的訊息，給對應 topic
+  const latestMessages = {};
+
+  function showTopicData(topic) {
+    if (latestMessages[topic]) {
+      const ph = latestMessages[topic].ph;
+      content.innerHTML = `
+        <div class="location-box">
+          <h2>${topic} 水質 pH</h2>
+          <div class="ph-value">pH 值：${ph.toFixed(2)}</div>
+        </div>
+      `;
+    } else {
+      content.innerHTML = `
+        <div class="location-box">
+          <h2>${topic} 水質 pH</h2>
+          <div class="ph-value">尚無數據</div>
+        </div>
+      `;
+    }
+  }
+
+  function connectMQTT(username, password) {
+    if (mqttClient) {
+      mqttClient.end(true);
+    }
+
+    mqttClient = mqtt.connect('wss://control.cittw.store:443', {
+      username,
+      password,
+      reconnectPeriod: 2000
     });
 
-    const statusEl = document.getElementById('status');
-    const phControlEl = document.getElementById('ph_control');
-    const phAEl = document.getElementById('ph_a');
-
-    client.on('connect', () => {
+    mqttClient.on('connect', () => {
       statusEl.textContent = '✅ 已連線至 MQTT Broker';
       statusEl.className = 'connected';
 
-      client.subscribe('sensor/control/ph');
-      client.subscribe('sensor/A/ph');
+      // 訂閱允許看的主題
+      topicsAllowed.forEach(t => mqttClient.subscribe(t));
     });
 
-    client.on('message', (topic, message) => {
+    mqttClient.on('message', (topic, message) => {
       try {
-        const msg = JSON.parse(message.toString());  // 解析 JSON
-        const ph = msg.ph;                            // 取出 ph 數值
-        if (topic === 'sensor/control/ph') {
-          phControlEl.textContent = `pH 值：${ph.toFixed(2)}`;
-        } else if (topic === 'sensor/A/ph') {
-          phAEl.textContent = `pH 值：${ph.toFixed(2)}`;
-        } else {
-          console.warn(`未知主題：${topic}`, msg);
+        const msg = JSON.parse(message.toString());
+        latestMessages[topic] = msg;
+        if (topic === currentTopic) {
+          showTopicData(topic);
         }
       } catch(e) {
         console.error('訊息解析錯誤', e);
       }
     });
 
-    client.on('reconnect', () => {
+    mqttClient.on('reconnect', () => {
       statusEl.textContent = '🔄 正在重新連線...';
       statusEl.className = '';
     });
 
-    client.on('error', (err) => {
+    mqttClient.on('error', (err) => {
       statusEl.textContent = '❌ 連線錯誤：' + err.message;
       statusEl.className = 'error';
       console.error('MQTT Error:', err);
     });
 
-    client.on('offline', () => {
+    mqttClient.on('offline', () => {
       statusEl.textContent = '⚠️ 已離線';
       statusEl.className = 'error';
     });
-  </script>
+  }
+
+  logoutBtn.onclick = () => {
+    if (mqttClient) {
+      mqttClient.end(true);
+      mqttClient = null;
+    }
+    topicsAllowed = [];
+    currentTopic = '';
+    latestMessages = {};
+
+    // 清空介面
+    sidebar.innerHTML = '';
+    content.innerHTML = '';
+    statusEl.textContent = '';
+    statusEl.className = '';
+
+    loginPage.style.display = 'flex';
+    dashboard.style.display = 'none';
+
+    // 清除登入欄
+    document.getElementById('username').value = '';
+    document.getElementById('password').value = '';
+
+    logoutBtn.style.display = 'none';
+  };
+
+  // 預設先顯示登入頁
+  loginPage.style.display = 'flex';
+  dashboard.style.display = 'none';
+  logoutBtn.style.display = 'none';
+</script>
+
 </body>
 </html>
