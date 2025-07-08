@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板 v0.06</title>
+  <title>水質監控儀表板 v0.07</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -29,7 +29,7 @@
       display: none;
     }
 
-    #status {
+    #status, #account-info {
       text-align: center;
       margin-bottom: 1em;
       font-weight: 600;
@@ -79,6 +79,15 @@
       margin-top: 0.3em;
       text-align: center;
     }
+    #logout-btn {
+      padding: 0.3em 1em;
+      background: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-left: 1em;
+    }
   </style>
 </head>
 <body>
@@ -94,6 +103,10 @@
 
   <!-- 主畫面 -->
   <div id="main-content">
+    <div id="account-info">
+      <span id="account-name"></span>
+      <button id="logout-btn" onclick="logout()">登出</button>
+    </div>
     <div id="status">連線中...</div>
 
     <div class="container">
@@ -127,9 +140,7 @@
 
       fetch('http://localhost:8000/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData
       })
       .then(response => {
@@ -139,6 +150,8 @@
       .then(data => {
         document.getElementById('login-status').innerText = '✅ 登入成功';
         document.getElementById('login-status').style.color = 'green';
+
+        document.getElementById('account-name').innerText = '帳號：' + user;
 
         document.getElementById('login-box').style.display = 'none';
         document.getElementById('main-content').style.display = 'block';
@@ -192,6 +205,20 @@
         statusEl.textContent = '⚠️ 已離線';
         statusEl.className = 'error';
       });
+    }
+
+    function logout() {
+      if (client) {
+        client.end(); // 關閉 MQTT
+        client = null;
+      }
+      document.getElementById('main-content').style.display = 'none';
+      document.getElementById('login-box').style.display = 'block';
+      document.getElementById('login-status').innerText = '';
+      document.getElementById('status').textContent = '連線中...';
+      document.getElementById('status').className = '';
+      document.getElementById('ph_control').textContent = '尚無數據';
+      document.getElementById('ph_a').textContent = '尚無數據';
     }
 
     // 頁籤切換邏輯
