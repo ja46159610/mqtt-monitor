@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質監控儀表板 v0.10</title>
+  <title>水質監控儀表板 v0.12</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -10,7 +10,7 @@
       background: #eef2f7;
       color: #333;
       padding: 2em;
-      max-width: 700px;
+      max-width: 900px;
       margin: auto;
     }
     h1 {
@@ -39,17 +39,53 @@
       padding: 0.5em 1em;
     }
 
-    .ph-box {
+    .container {
+      display: flex;
+      gap: 1em;
+    }
+
+    .tabs {
+      display: flex;
+      flex-direction: column;
+      width: 160px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 0.5em;
+    }
+
+    .tab {
+      padding: 0.75em 1em;
+      background: #bdc9d9;
+      color: #2c3e50;
+      cursor: pointer;
+      font-weight: 600;
+      border-radius: 6px;
+      margin-bottom: 0.5em;
+      text-align: center;
+      user-select: none;
+      transition: background 0.3s;
+    }
+    .tab.active {
+      background: #2980b9;
+      color: white;
+      box-shadow: 0 3px 8px rgba(41,128,185,0.6);
+    }
+
+    .content-box {
+      flex-grow: 1;
       background: white;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       padding: 2em 1.5em;
-      margin-top: 1.5em;
+      min-height: 150px;
+      display: none;
     }
-    h2 {
-      margin-top: 0;
-      color: #2980b9;
+
+    .content-box.active {
+      display: block;
     }
+
     .ph-value {
       font-size: 4rem;
       font-weight: 700;
@@ -57,39 +93,34 @@
       text-align: center;
       margin-top: 0.3em;
     }
+
+    #dashboard {
+      display: none;
+    }
   </style>
 </head>
 <body>
-  <h1>水質即時監控儀表板</h1>
+  <h1>水質即時監控儀表板 v0.12</h1>
 
   <!-- 登入表單 -->
   <div id="login-box">
-    <input type="text" id="username" placeholder="帳號">
-    <br>
-    <input type="password" id="password" placeholder="密碼">
-    <br>
+    <input type="text" id="username" placeholder="帳號"><br>
+    <input type="password" id="password" placeholder="密碼"><br>
     <button onclick="submitLogin()">登入</button>
     <span id="login-status"></span>
   </div>
 
-  <div id="status">尚未連線</div>
-
-  <div class="ph-box">
-    <h2>溫泉會館 A pH</h2>
-    <div id="ph_control" class="ph-value">尚無數據</div>
-  </div>
-
-  <div class="ph-box">
-    <h2>溫泉會館 B pH</h2>
-    <div id="ph_a" class="ph-value">尚無數據</div>
+  <!-- 儀表板 -->
+  <div id="dashboard">
+    <div id="status">尚未連線</div>
+    <div class="container">
+      <div class="tabs" id="tabs"></div>
+      <div id="contents"></div>
+    </div>
   </div>
 
   <script>
     let client = null;
-
-    const statusEl = document.getElementById('status');
-    const phControlEl = document.getElementById('ph_control');
-    const phAEl = document.getElementById('ph_a');
 
     function submitLogin() {
       const user = document.getElementById('username').value;
@@ -116,7 +147,12 @@
         document.getElementById('login-status').textContent = '✅ 登入成功';
         document.getElementById('login-status').style.color = 'green';
 
-        alert("登入成功！您可查看的主題為：\n" + topics.join("\n"));
+        document.getElementById('login-box').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+
+        alert("登入成功，您可查看的主題：\n" + topics.join("\n"));
+
+        setupUI(topics);
         initMQTT(topics);
       })
       .catch(err => {
@@ -126,8 +162,45 @@
       });
     }
 
+    function setupUI(topics) {
+      const tabsEl = document.getElementById('tabs');
+      const contentsEl = document.getElementById('contents');
+      tabsEl.innerHTML = '';
+      contentsEl.innerHTML = '';
+
+      topics.forEach((topic, idx) => {
+        let label = '';
+        if (topic === 'sensor/control/ph') label = '溫泉會館 A';
+        else if (topic === 'sensor/A/ph') label = '溫泉會館 B';
+        else label = topic;
+
+        const tab = document.createElement('div');
+        tab.className = 'tab' + (idx === 0 ? ' active' : '');
+        tab.textContent = label;
+        tab.dataset.target = topic;
+        tabsEl.appendChild(tab);
+
+        const content = document.createElement('div');
+        content.className = 'content-box' + (idx === 0 ? ' active' : '');
+        content.id = 'content-' + topic;
+        content.innerHTML = `
+          <h2>${label} pH</h2>
+          <div class="ph-value" id="ph-${topic.replace(/\//g, '-') }">尚無數據</div>
+        `;
+        contentsEl.appendChild(content);
+
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.content-box').forEach(c => c.classList.remove('active'));
+          tab.classList.add('active');
+          content.classList.add('active');
+        });
+      });
+    }
+
     function initMQTT(topics) {
-      if (client) client.end(); // 若已有連線，先中斷
+      const statusEl = document.getElementById('status');
+      if (client) client.end(true); // 中斷前一個連線
 
       client = mqtt.connect('wss://control.cittw.store:443', {
         username: 'user1',
@@ -140,7 +213,7 @@
         statusEl.className = 'connected';
         topics.forEach(t => {
           client.subscribe(t);
-          console.log("已訂閱：", t);
+          console.log('已訂閱：', t);
         });
       });
 
@@ -148,22 +221,17 @@
         try {
           const msg = JSON.parse(message.toString());
           const ph = msg.ph;
-          if (topic === 'sensor/control/ph') {
-            phControlEl.textContent = `pH 值：${ph.toFixed(2)}`;
-          } else if (topic === 'sensor/A/ph') {
-            phAEl.textContent = `pH 值：${ph.toFixed(2)}`;
-          } else {
-            console.warn("未知主題：", topic);
-          }
+          const id = 'ph-' + topic.replace(/\//g, '-');
+          const el = document.getElementById(id);
+          if (el) el.textContent = `pH 值：${ph.toFixed(2)}`;
         } catch (e) {
-          console.error("訊息解析錯誤", e);
+          console.error('訊息解析錯誤', e);
         }
       });
 
       client.on('error', err => {
         statusEl.textContent = '❌ 連線錯誤：' + err.message;
         statusEl.className = 'error';
-        console.error("MQTT 連線錯誤：", err);
       });
 
       client.on('offline', () => {
