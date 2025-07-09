@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>水質即時監控儀表板 v0.13</title>
+  <title>水質監控儀表板 v0.14</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
     body {
@@ -13,24 +13,16 @@
       max-width: 700px;
       margin: auto;
     }
-    h1 {
-      text-align: center;
-      color: #2c3e50;
-      margin-bottom: 1em;
-    }
-    #status {
+    h1 { text-align: center; color: #2c3e50; margin-bottom: 1em; }
+    #status, #login-status, #timing-log {
       text-align: center;
       margin-bottom: 1em;
       font-weight: 600;
-      color: #34495e;
     }
     .error { color: #e74c3c; }
     .connected { color: #27ae60; }
 
-    .container {
-      display: flex;
-      gap: 1em;
-    }
+    .container { display: none; gap: 1em; }
     .tabs {
       display: flex;
       flex-direction: column;
@@ -68,10 +60,7 @@
     .content-box:hover {
       box-shadow: 0 4px 15px rgb(0 0 0 / 0.15);
     }
-    h2 {
-      margin-top: 0;
-      color: #2980b9;
-    }
+    h2 { margin-top: 0; color: #2980b9; }
     .ph-value {
       font-size: 4rem;
       font-weight: 700;
@@ -79,187 +68,179 @@
       margin-top: 0.3em;
       text-align: center;
     }
-    #logoutBtn {
-      float: right;
-      margin-bottom: 10px;
-      padding: 0.3em 1em;
-      cursor: pointer;
-      background-color: #e74c3c;
-      color: white;
-      border: none;
-      border-radius: 4px;
-    }
-    #logoutBtn:hover {
-      background-color: #c0392b;
-    }
   </style>
 </head>
 <body>
-  <h1>水質即時監控儀表板 v0.13</h1>
+  <h1>水質即時監控儀表板 v0.14</h1>
 
   <!-- 登入區 -->
-  <div id="login-box" style="text-align:center; margin-bottom:1.5em;">
-    <input type="text" id="username" placeholder="帳號" style="padding:0.5em; margin:0.5em;"><br>
-    <input type="password" id="password" placeholder="密碼" style="padding:0.5em; margin:0.5em;"><br>
+  <div id="login-box" style="text-align:center;">
+    <input type="text" id="username" placeholder="帳號" style="padding:0.5em; margin:0.5em;">
+    <input type="password" id="password" placeholder="密碼" style="padding:0.5em; margin:0.5em;">
     <button onclick="submitLogin()">登入</button>
-    <span id="login-status" style="margin-left:1em;"></span>
+    <button onclick="logout()">登出</button>
+    <div id="login-status"></div>
   </div>
 
-  <!-- 儀表板區 -->
-  <div id="dashboard" style="display:none;">
-    <button id="logoutBtn" onclick="logout()">登出</button>
-    <div id="status">尚未連線</div>
-    <div class="container">
-      <div class="tabs" id="tabs"></div>
-      <div id="contents"></div>
+  <div id="status">請先登入以查看資料</div>
+  <div id="timing-log" style="font-size: 0.95em;"></div>
+
+  <!-- 主頁面 -->
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" data-target="control">溫泉會館_A</div>
+      <div class="tab" data-target="a">溫泉會館_B</div>
+    </div>
+
+    <div id="control" class="content-box">
+      <h2>湯池_1 水質 pH</h2>
+      <div id="ph_control" class="ph-value">尚無數據</div>
+    </div>
+
+    <div id="a" class="content-box" style="display:none;">
+      <h2>湯池_2 水質 pH</h2>
+      <div id="ph_a" class="ph-value">尚無數據</div>
     </div>
   </div>
 
   <script>
     let client = null;
+    let t_start = 0;
+    let timingLog = "";
 
-    function submitLogin() {
-      const user = document.getElementById('username').value;
-      const pwd = document.getElementById('password').value;
+    const tabs = document.querySelectorAll('.tab');
+    const contents = {
+      control: document.getElementById('control'),
+      a: document.getElementById('a')
+    };
 
-      const formData = new URLSearchParams();
-      formData.append('User', user);
-      formData.append('Pwd', pwd);
-
-      fetch('http://localhost:8000/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: formData
-      })
-      .then(response => {
-        if (!response.ok) throw new Error('帳號或密碼錯誤');
-        return response.json();
-      })
-      .then(data => {
-        const rawTopics = data.topics || "";
-        const topics = rawTopics.split(',').map(t => t.trim()).filter(t => t !== "");
-        if (topics.length === 0) throw new Error("無效的訂閱主題");
-
-        document.getElementById('login-status').textContent = '✅ 登入成功';
-        document.getElementById('login-status').style.color = 'green';
-
-        // 隱藏登入區，顯示儀表板
-        document.getElementById('login-box').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'block';
-
-        alert("登入成功，您可查看的主題：\n" + topics.join("\n"));
-
-        setupUI(topics);
-        initMQTT(topics);
-      })
-      .catch(err => {
-        document.getElementById('login-status').textContent = '❌ ' + err.message;
-        document.getElementById('login-status').style.color = 'red';
-        console.error('登入錯誤：', err);
-      });
-    }
-
-    function setupUI(topics) {
-      const tabsEl = document.getElementById('tabs');
-      const contentsEl = document.getElementById('contents');
-      tabsEl.innerHTML = '';
-      contentsEl.innerHTML = '';
-
-      topics.forEach((topic, idx) => {
-        let label = '';
-        if (topic === 'sensor/control/ph') label = '溫泉會館 A';
-        else if (topic === 'sensor/A/ph') label = '溫泉會館 B';
-        else label = topic;
-
-        const tab = document.createElement('div');
-        tab.className = 'tab' + (idx === 0 ? ' active' : '');
-        tab.textContent = label;
-        tab.dataset.target = topic;
-        tabsEl.appendChild(tab);
-
-        const content = document.createElement('div');
-        content.className = 'content-box' + (idx === 0 ? ' active' : '');
-        content.id = 'content-' + topic.replace(/\//g, '-');
-        content.innerHTML = `
-          <h2>${label} pH</h2>
-          <div class="ph-value" id="ph-${topic.replace(/\//g, '-')}">尚無數據</div>
-        `;
-        contentsEl.appendChild(content);
-
-        tab.addEventListener('click', () => {
-          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-          document.querySelectorAll('.content-box').forEach(c => c.classList.remove('active'));
-          tab.classList.add('active');
-          content.classList.add('active');
-        });
-      });
-    }
-
-    function initMQTT(topics) {
-      const statusEl = document.getElementById('status');
-      if (client) client.end(true);
-
-      client = mqtt.connect('wss://control.cittw.store:443', {
-        username: 'user1',
-        password: '16968033',
-        reconnectPeriod: 2000
-      });
-
-      client.on('connect', () => {
-        statusEl.textContent = '✅ 已連線至 MQTT Broker';
-        statusEl.className = 'connected';
-        topics.forEach(t => {
-          client.subscribe(t);
-          console.log('已訂閱：', t);
-        });
-      });
-
-      client.on('message', (topic, message) => {
-        try {
-          const msg = JSON.parse(message.toString());
-          const ph = msg.ph;
-          const id = 'ph-' + topic.replace(/\//g, '-');
-          const el = document.getElementById(id);
-          if (el) el.textContent = `pH 值：${ph.toFixed(2)}`;
-        } catch (e) {
-          console.error('訊息解析錯誤', e);
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.target;
+        for (const key in contents) {
+          contents[key].style.display = (key === target) ? 'block' : 'none';
         }
       });
+    });
 
-      client.on('error', err => {
-        statusEl.textContent = '❌ 連線錯誤：' + err.message;
-        statusEl.className = 'error';
-      });
+    function logTiming(msg) {
+      const now = (performance.now() - t_start).toFixed(0);
+      timingLog += `⏱️ ${msg}（${now} ms）<br>`;
+      document.getElementById("timing-log").innerHTML = timingLog;
+    }
 
-      client.on('offline', () => {
-        statusEl.textContent = '⚠️ 已離線';
-        statusEl.className = 'error';
-      });
+    function submitLogin() {
+      const user = document.getElementById("username").value;
+      const pwd = document.getElementById("password").value;
 
-      client.on('reconnect', () => {
-        statusEl.textContent = '🔄 嘗試重新連線...';
-        statusEl.className = '';
-      });
+      if (!user || !pwd) {
+        document.getElementById("login-status").textContent = "請輸入帳號與密碼";
+        document.getElementById("login-status").style.color = "red";
+        return;
+      }
+
+      const formData = new URLSearchParams();
+      formData.append("User", user);
+      formData.append("Pwd", pwd);
+
+      fetch("http://localhost:8000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: formData
+      })
+        .then(res => {
+          if (!res.ok) throw new Error("帳號或密碼錯誤");
+          return res.json();
+        })
+        .then(data => {
+          alert("登入成功，允許主題：" + data.topics);
+          document.getElementById("login-status").textContent = "✅ 登入成功";
+          document.getElementById("login-status").style.color = "green";
+
+          // 顯示主頁內容
+          document.querySelector(".container").style.display = "flex";
+          document.getElementById("status").textContent = "連線中...";
+          document.getElementById("status").className = "";
+          document.getElementById("timing-log").textContent = "";
+          timingLog = "";
+
+          // 清空上一次的 client
+          if (client) {
+            client.end();
+            client = null;
+          }
+
+          // 開始計時
+          t_start = performance.now();
+          logTiming("開始建立 MQTT 連線");
+
+          // 建立 MQTT 客戶端
+          client = mqtt.connect("wss://control.cittw.store:443", {
+            username: user,
+            password: pwd,
+            reconnectPeriod: 2000
+          });
+
+          client.on("connect", () => {
+            logTiming("✅ 已連線到 MQTT Broker");
+            document.getElementById("status").textContent = "✅ 已連線至 MQTT Broker";
+            document.getElementById("status").className = "connected";
+
+            // 訂閱使用者允許的 topics
+            const topics = data.topics.split(",");
+            topics.forEach(topic => {
+              client.subscribe(topic.trim());
+              logTiming("📡 已訂閱: " + topic.trim());
+            });
+          });
+
+          client.on("message", (topic, message) => {
+            logTiming("📥 收到資料：" + topic);
+            try {
+              const msg = JSON.parse(message.toString());
+              const ph = msg.ph;
+              if (topic === "sensor/control/ph") {
+                document.getElementById("ph_control").textContent = `pH 值：${ph.toFixed(2)}`;
+              } else if (topic === "sensor/A/ph") {
+                document.getElementById("ph_a").textContent = `pH 值：${ph.toFixed(2)}`;
+              }
+            } catch (e) {
+              console.error("解析錯誤", e);
+            }
+          });
+
+          client.on("error", err => {
+            document.getElementById("status").textContent = "❌ 連線錯誤：" + err.message;
+            document.getElementById("status").className = "error";
+          });
+
+          client.on("offline", () => {
+            document.getElementById("status").textContent = "⚠️ 已離線";
+            document.getElementById("status").className = "error";
+          });
+        })
+        .catch(err => {
+          document.getElementById("login-status").textContent = "❌ 登入失敗：" + err.message;
+          document.getElementById("login-status").style.color = "red";
+        });
     }
 
     function logout() {
       if (client) {
-        client.end(true);
+        client.end();
         client = null;
       }
-      // 重設狀態文字
-      document.getElementById('status').textContent = '尚未連線';
-      document.getElementById('status').className = '';
-      // 清空所有 pH 顯示
-      document.querySelectorAll('.ph-value').forEach(el => el.textContent = '尚無數據');
-      // 顯示登入框，隱藏儀表板
-      document.getElementById('login-box').style.display = 'block';
-      document.getElementById('dashboard').style.display = 'none';
-      // 清空帳號密碼欄位
-      document.getElementById('username').value = '';
-      document.getElementById('password').value = '';
-      // 清空登入狀態文字
-      document.getElementById('login-status').textContent = '';
+
+      document.getElementById("username").value = "";
+      document.getElementById("password").value = "";
+      document.getElementById("login-status").textContent = "已登出";
+      document.getElementById("login-status").style.color = "gray";
+      document.getElementById("status").textContent = "請先登入以查看資料";
+      document.getElementById("status").className = "";
+      document.getElementById("timing-log").textContent = "";
+      document.querySelector(".container").style.display = "none";
     }
   </script>
 </body>
